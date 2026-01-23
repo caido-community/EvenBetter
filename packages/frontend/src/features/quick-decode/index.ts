@@ -553,10 +553,7 @@ class QuickDecodeManager {
   private attachQuickDecode(): void {
     this.removeExistingQuickDecode();
 
-    const sessionListBody = document
-      .querySelector(".c-tree")
-      ?.closest('[data-pc-section="content"]')
-      ?.querySelector("div");
+    const sessionListBody = document.querySelector(".size-full.flex.flex-col .size-full.flex.flex-col");
     if (!sessionListBody) return;
 
     this.quickDecode = new QuickDecode();
