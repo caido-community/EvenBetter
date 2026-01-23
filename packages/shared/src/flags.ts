@@ -4,7 +4,6 @@ export type FeatureFlagTag =
   | "quick-decode"
   | "clear-all-findings"
   | "share-scope"
-  | "share-mar"
   | "share-replay-collections"
   | "colorize-by-method"
   | "share-filters"

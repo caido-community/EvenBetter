@@ -54,12 +54,7 @@ export class FeatureFlagsStore {
         enabled: true,
         kind: "frontend",
       },
-      {
-        tag: "share-mar",
-        description: "Import & export Match and Replace rules",
-        enabled: true,
-        kind: "frontend",
-      },
+
       {
         tag: "exclude-host-path",
         description:
