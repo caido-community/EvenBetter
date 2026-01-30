@@ -2,6 +2,7 @@ import { createFeature } from "@/features/manager";
 import { type FrontendSDK } from "@/types";
 
 let intervalId: Timeout | undefined;
+let projectChangeHandler: { stop: () => void } | undefined;
 
 interface TimeFilter {
   name: string;
@@ -35,6 +36,12 @@ const createTimeBasedFilterQuery = (minutes: number): string => {
 };
 
 const maintainTimeFilters = async (sdk: FrontendSDK) => {
+  const currentProject = sdk.projects.getCurrent();
+  if (!currentProject) {
+    // No project selected, skip silently
+    return;
+  }
+
   try {
     // Get all existing filters
     const existingFilters = sdk.filters.getAll();
@@ -71,6 +78,9 @@ const maintainTimeFilters = async (sdk: FrontendSDK) => {
 };
 
 const startFilterMaintenance = (sdk: FrontendSDK) => {
+  // Stop any existing interval
+  stopInterval();
+
   // Run immediately
   maintainTimeFilters(sdk);
 
@@ -80,10 +90,26 @@ const startFilterMaintenance = (sdk: FrontendSDK) => {
   }, 60000); // 60,000ms = 1 minute
 };
 
-const stopFilterMaintenance = async (sdk: FrontendSDK) => {
+const stopInterval = () => {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = undefined;
+  }
+};
+
+const stopFilterMaintenance = async (sdk: FrontendSDK) => {
+  stopInterval();
+
+  // Stop listening to project changes
+  if (projectChangeHandler) {
+    projectChangeHandler.stop();
+    projectChangeHandler = undefined;
+  }
+
+  // Check if a project is selected before trying to clean up
+  const currentProject = sdk.projects.getCurrent();
+  if (!currentProject) {
+    return;
   }
 
   try {
@@ -110,9 +136,25 @@ const stopFilterMaintenance = async (sdk: FrontendSDK) => {
 
 export default createFeature("common-filters", {
   onFlagEnabled: (sdk: FrontendSDK) => {
-    startFilterMaintenance(sdk);
+    // Listen for project changes
+    projectChangeHandler = sdk.projects.onCurrentProjectChange((event) => {
+      if (event.projectId) {
+        // Project selected, start maintenance
+        startFilterMaintenance(sdk);
+      } else {
+        // No project selected, stop interval (but keep listening for project changes)
+        stopInterval();
+      }
+    });
+
+    // Start immediately if a project is already selected
+    const currentProject = sdk.projects.getCurrent();
+    if (currentProject) {
+      startFilterMaintenance(sdk);
+    }
   },
   onFlagDisabled: (sdk: FrontendSDK) => {
     stopFilterMaintenance(sdk);
   },
 });
+
