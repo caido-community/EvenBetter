@@ -14,8 +14,8 @@ export default defineConfig({
   version: "4.0.2",
   author: {
     name: "bebiks",
-    email: "bebiks@cvssadvisor.com",
-    url: "https://github.com/bebiksior/evenbetter",
+    email: "lukasz@caido.io",
+    url: "https://github.com/caido-community/EvenBetter",
   },
   plugins: [
     {
