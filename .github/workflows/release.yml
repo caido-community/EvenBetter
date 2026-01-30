@@ -51,9 +51,10 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create release
-        uses: ncipollo/release-action@v1
+        uses: caido/action-release@v1
         with:
           tag: ${{ steps.meta.outputs.version }}
           commit: ${{ github.sha }}
           body: 'Release ${{ steps.meta.outputs.version }}'
           artifacts: 'dist/plugin_package.zip,dist/plugin_package.zip.sig'
+          immutableCreate: true
