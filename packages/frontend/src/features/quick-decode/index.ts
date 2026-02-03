@@ -595,6 +595,8 @@ class QuickDecodeManager {
       if (newHash === "#/replay") {
         this.cleanup(false);
         attach();
+      } else {
+        this.cleanup(false);
       }
     };
 
