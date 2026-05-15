@@ -8,7 +8,7 @@ const excludeHostPathFunctionality = (sdk: FrontendSDK) => {
       const selectedRequest = await getSelectedRequest(sdk);
       if (!selectedRequest) return;
 
-      const currentQuery = String(sdk.httpHistory.getQuery());
+      const currentQuery = sdk.httpHistory.getQuery();
       const newQuery =
         currentQuery.length > 0
           ? `${currentQuery} AND req.host.ne:"${selectedRequest.host}"`
@@ -29,7 +29,7 @@ const excludeHostPathFunctionality = (sdk: FrontendSDK) => {
       const selectedRequest = await getSelectedRequest(sdk);
       if (!selectedRequest) return;
 
-      const currentQuery = String(sdk.httpHistory.getQuery());
+      const currentQuery = sdk.httpHistory.getQuery();
       const newQuery =
         currentQuery.length > 0
           ? `${currentQuery} AND req.path.ne:"${selectedRequest.path}"`
