@@ -1,9 +1,8 @@
-import { type FrontendSDK } from "@/types";
-import { createFeature } from "@/features/manager";
-
 import "./quick-decode.css";
 
 import { onLocationChange } from "@/dom";
+import { createFeature } from "@/features/manager";
+import { type FrontendSDK } from "@/types";
 
 interface CodeMirrorEditor {
   state: {
@@ -25,8 +24,23 @@ interface CodeMirrorEditor {
     sliceDoc: (from: number, to: number) => string;
   };
   contentDOM: HTMLElement;
-  dispatch: (changes: any) => void;
+  dispatch: (changes: {
+    changes: Array<{
+      from: number;
+      to: number;
+      insert: string;
+    }>;
+  }) => void;
 }
+
+type CodeMirrorViewHost = HTMLElement & {
+  cmView?: {
+    view?: CodeMirrorEditor;
+  };
+  cmTile?: {
+    view?: CodeMirrorEditor;
+  };
+};
 
 interface Selection {
   from: number;
@@ -344,7 +358,7 @@ class QuickDecode {
   }
 
   public updateEncodeMethod(encodeMethod?: string): void {
-    this.encodeMethod = encodeMethod || "none";
+    this.encodeMethod = encodeMethod ?? "none";
     this.encodeMethodSelect.value = this.encodeMethod;
   }
 
@@ -360,14 +374,29 @@ class QuickDecode {
     return this.HTMLElement;
   }
 
+  private getEditorFromElement(element: Element): CodeMirrorEditor | undefined {
+    let current: Element | undefined = element;
+
+    while (current !== undefined) {
+      if (current instanceof HTMLElement) {
+        const host = current as CodeMirrorViewHost;
+        const view = host.cmView?.view ?? host.cmTile?.view;
+
+        if (view !== undefined) return view;
+      }
+
+      current = current.parentElement ?? undefined;
+    }
+  }
+
   private getActiveEditor(): CodeMirrorEditor | undefined {
     const activeElement = document.activeElement;
-    if (!activeElement) return;
+    if (activeElement === null) return;
 
     const cmContent = activeElement.closest(".cm-content");
-    if (!cmContent) return;
+    if (cmContent === null) return;
 
-    return (cmContent as any)?.cmView?.view as CodeMirrorEditor;
+    return this.getEditorFromElement(cmContent);
   }
 
   private getCurrentSelection(): Selection {
@@ -402,13 +431,12 @@ class QuickDecode {
   }
 
   public stopMonitoringSelection(): void {
-    if (this.selectionInterval) {
+    if (this.selectionInterval !== undefined) {
       clearInterval(this.selectionInterval);
     }
   }
 
   private isMouseOver(element: HTMLElement): boolean {
-    if (!element) return false;
     return Array.from(document.querySelectorAll(":hover")).includes(element);
   }
 
@@ -416,7 +444,12 @@ class QuickDecode {
     if (this.isMouseOver(this.HTMLElement)) return;
 
     const contextMenu = document.querySelector(".p-contextmenu");
-    if (contextMenu && this.isMouseOver(contextMenu as HTMLElement)) return;
+    if (
+      contextMenu !== null &&
+      contextMenu instanceof HTMLElement &&
+      this.isMouseOver(contextMenu)
+    )
+      return;
 
     if (selection.text === "") {
       this.hide();
@@ -522,7 +555,7 @@ class QuickDecode {
     this.textArea.removeEventListener("input", this.handleInput);
     this.textArea.removeEventListener("keydown", this.handleKeyDown);
     this.encodeMethodSelect.removeEventListener("change", this.handleInput);
-    if (this.copyIconElement) {
+    if (this.copyIconElement !== undefined) {
       this.copyIconElement.removeEventListener("click", this.copyToClipboard);
     }
     this.HTMLElement.remove();
@@ -533,7 +566,7 @@ class QuickDecodeManager {
   private sdk: FrontendSDK;
   private quickDecode: QuickDecode | undefined = undefined;
   private cleanupListener: (() => void) | undefined = undefined;
-  private projectChangeListener: (() => Promise<void>) | undefined = undefined;
+  private projectChangeListener: (() => void) | undefined = undefined;
   private pageOpenListener: ((newHash: string) => void) | undefined = undefined;
   private isCleaned: boolean = false;
 
@@ -542,22 +575,54 @@ class QuickDecodeManager {
   }
 
   private removeExistingQuickDecode(): void {
-    const existingElements = document.getElementsByClassName(
-      "evenbetter__qd-body",
+    const existingElements = document.querySelectorAll(
+      "#plugin--evenbetter, .evenbetter__qd-body",
     );
     Array.from(existingElements).forEach((element) => {
       element.remove();
     });
   }
 
+  private getAttachTarget(): HTMLElement | undefined {
+    const editors = Array.from(
+      document.querySelectorAll(".cm-editor .cm-content"),
+    );
+
+    if (editors.length === 0) return undefined;
+
+    const candidates = Array.from(
+      document.querySelectorAll(".size-full.flex.flex-col"),
+    ).filter((element): element is HTMLElement => {
+      return (
+        element instanceof HTMLElement &&
+        editors.every((editor) => element.contains(editor))
+      );
+    });
+
+    if (candidates.length === 0) return undefined;
+
+    const sorted = candidates.sort((a, b) => {
+      const aRect = a.getBoundingClientRect();
+      const bRect = b.getBoundingClientRect();
+
+      return aRect.width * aRect.height - bRect.width * bRect.height;
+    });
+
+    return sorted[0];
+  }
+
   private attachQuickDecode(): void {
     this.removeExistingQuickDecode();
 
-    const sessionListBody = document.querySelector(".size-full.flex.flex-col .size-full.flex.flex-col");
-    if (!sessionListBody) return;
+    const attachTarget = this.getAttachTarget();
+    if (attachTarget === undefined) return;
 
     this.quickDecode = new QuickDecode();
-    sessionListBody.appendChild(this.quickDecode.getElement());
+    attachTarget.appendChild(this.quickDecode.getElement());
+  }
+
+  private isReplayRoute(hash: string = window.location.hash): boolean {
+    return hash === "#/replay" || hash.startsWith("#/replay/");
   }
 
   public init(): void {
@@ -582,7 +647,7 @@ class QuickDecodeManager {
         }
 
         const editors = document.querySelectorAll(".cm-editor .cm-content");
-        if (!editors.length) return;
+        if (editors.length === 0) return;
 
         clearInterval(interval);
         this.attachQuickDecode();
@@ -592,7 +657,7 @@ class QuickDecodeManager {
     this.pageOpenListener = (newHash: string) => {
       if (this.isCleaned) return;
 
-      if (newHash === "#/replay") {
+      if (this.isReplayRoute(newHash)) {
         this.cleanup(false);
         attach();
       } else {
@@ -600,12 +665,14 @@ class QuickDecodeManager {
       }
     };
 
-    this.projectChangeListener = async () => {
+    this.projectChangeListener = () => {
       if (this.isCleaned) return;
 
       this.cleanup(false);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      if (window.location.hash === "#/replay") attach();
+      window.setTimeout(() => {
+        if (this.isCleaned) return;
+        if (this.isReplayRoute()) attach();
+      }, 500);
     };
 
     this.sdk.backend.onEvent(
