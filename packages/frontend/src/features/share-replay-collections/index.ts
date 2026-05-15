@@ -9,6 +9,51 @@ const shareReplayCollectionsElements: HTMLElement[] = [];
 let mutationObserver: MutationObserver | undefined = undefined;
 const cancelFunctions: (() => void)[] = [];
 
+type DownloadCollectionResult =
+  | { kind: "Ok" }
+  | { kind: "Error"; error: string };
+
+type ImportedReplayEntry = {
+  name: string;
+  raw: string;
+  connection: {
+    host: string;
+    port: number;
+    isTLS: boolean;
+  };
+};
+
+type ImportedCollection = {
+  name: string;
+  replayEntries?: ImportedReplayEntry[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isImportedReplayEntry(value: unknown): value is ImportedReplayEntry {
+  if (!isRecord(value)) return false;
+  if (!isRecord(value.connection)) return false;
+
+  return (
+    typeof value.name === "string" &&
+    typeof value.raw === "string" &&
+    typeof value.connection.host === "string" &&
+    typeof value.connection.port === "number" &&
+    typeof value.connection.isTLS === "boolean"
+  );
+}
+
+function isImportedCollection(value: unknown): value is ImportedCollection {
+  if (!isRecord(value)) return false;
+  if (typeof value.name !== "string") return false;
+  if (value.replayEntries === undefined) return true;
+  if (!Array.isArray(value.replayEntries)) return false;
+
+  return value.replayEntries.every(isImportedReplayEntry);
+}
+
 export const shareReplayCollections = createFeature(
   "share-replay-collections",
   {
@@ -19,8 +64,10 @@ export const shareReplayCollections = createFeature(
       shareReplayCollectionsElements.forEach((element) => {
         element.remove();
       });
+      shareReplayCollectionsElements.length = 0;
 
       cancelFunctions.forEach((cancelFunction) => cancelFunction());
+      cancelFunctions.length = 0;
 
       if (mutationObserver) {
         mutationObserver.disconnect();
@@ -102,17 +149,20 @@ const createCollection = async (collectionName: string, sdk: FrontendSDK) => {
   });
 };
 
-const downloadCollection = async (collectionID: string, sdk: FrontendSDK) => {
+const downloadCollection = async (
+  collectionID: string,
+  sdk: FrontendSDK,
+): Promise<DownloadCollectionResult> => {
   const collection = await getCollectionByID(collectionID, sdk);
-  if (!collection) return new Error("Collection not found");
+  if (!collection) return { kind: "Error", error: "Collection not found" };
 
   const replayEntries = [];
 
   const sessions = collection.node.sessions;
-  if (sessions && sessions.length > 0) {
+  if (sessions.length > 0) {
     for (const session of sessions) {
       const entryID = session.activeEntry?.id;
-      if (!entryID) continue;
+      if (entryID === undefined) continue;
 
       const replayEntry = await sdk.graphql.replayEntry({
         id: entryID,
@@ -138,15 +188,25 @@ const downloadCollection = async (collectionID: string, sdk: FrontendSDK) => {
     duration: 3000,
     variant: "success",
   });
+
+  return { kind: "Ok" };
 };
 
-const importCollection = async (collection: any, sdk: FrontendSDK) => {
+const importCollection = async (collection: unknown, sdk: FrontendSDK) => {
+  if (!isImportedCollection(collection)) {
+    sdk.window.showToast("Invalid collection file", {
+      duration: 3000,
+      variant: "error",
+    });
+    return;
+  }
+
   const collectionName = collection.name;
   const newCollection = await createCollection(collectionName, sdk);
 
   const newCollectionID =
     newCollection.createReplaySessionCollection.collection?.id;
-  if (!newCollectionID) return;
+  if (newCollectionID === undefined) return;
 
   const replayEntries = collection.replayEntries;
   if (replayEntries && replayEntries.length > 0) {
@@ -166,11 +226,11 @@ const importCollection = async (collection: any, sdk: FrontendSDK) => {
         sdk,
       );
 
-      const sesionID = newSession.createReplaySession.session?.id;
-      if (!sesionID) return;
+      const sessionID = newSession.createReplaySession.session?.id;
+      if (sessionID === undefined) continue;
 
       await sdk.graphql.renameReplaySession({
-        id: sesionID,
+        id: sessionID,
         name: replayEntry.name,
       });
     }
@@ -202,7 +262,7 @@ const attachImportButton = (sdk: FrontendSDK) => {
 
   importButton.style.float = "left";
   importButton.style.marginRight = "1em";
-  importButton.addEventListener("click", async () => {
+  importButton.addEventListener("click", () => {
     importFile(".json", async (content: string) => {
       try {
         const collection = JSON.parse(content);
@@ -222,7 +282,7 @@ const attachImportButton = (sdk: FrontendSDK) => {
 
 const attachExportButton = (sdk: FrontendSDK) => {
   const collections = document.querySelectorAll(".c-tree-collection");
-  if (!collections || collections.length === 0) return;
+  if (collections.length === 0) return;
 
   collections.forEach((collection) => {
     if (collection.querySelector("#download-collection")) return;
@@ -230,8 +290,8 @@ const attachExportButton = (sdk: FrontendSDK) => {
     const actions = collection.querySelector(".c-tree-collection__actions");
     if (!actions) return;
 
-    const newElement = actions.childNodes[0]?.cloneNode(true) as HTMLElement;
-    if (!newElement) return;
+    const newElement = actions.childNodes[0]?.cloneNode(true);
+    if (!(newElement instanceof HTMLElement)) return;
 
     shareReplayCollectionsElements.push(newElement);
 
@@ -242,11 +302,11 @@ const attachExportButton = (sdk: FrontendSDK) => {
     icon.classList.value = "c-icon fas fa-file-arrow-down";
     newElement.addEventListener("click", async () => {
       const collectionID = collection.getAttribute("data-collection-id");
-      if (!collectionID) return;
+      if (collectionID === null) return;
 
-      const err = await downloadCollection(collectionID, sdk);
-      if (err) {
-        sdk.window.showToast("Failed to download collection: " + err, {
+      const result = await downloadCollection(collectionID, sdk);
+      if (result.kind === "Error") {
+        sdk.window.showToast("Failed to download collection: " + result.error, {
           duration: 3000,
           variant: "error",
         });

@@ -4,7 +4,7 @@ import { type FrontendSDK } from "@/types";
 import { downloadFile, importFile } from "@/utils/file-utils";
 
 let filterTabObserver: MutationObserver | undefined = undefined;
-let cancelListener: () => void;
+let cancelListener: (() => void) | undefined = undefined;
 let filterButtons: HTMLElement[] = [];
 
 export const shareFilters = createFeature("share-filters", {
@@ -20,8 +20,9 @@ export const shareFilters = createFeature("share-filters", {
   },
   onFlagDisabled: () => {
     cleanupFilterElements();
-    if (cancelListener) {
+    if (cancelListener !== undefined) {
       cancelListener();
+      cancelListener = undefined;
     }
   },
 });
@@ -119,7 +120,7 @@ const observeFilterTab = (sdk: FrontendSDK) => {
     }
   });
 
-  if (formBody) {
+  if (formBody !== null) {
     filterTabObserver.observe(formBody, {
       childList: true,
       attributes: true,
@@ -127,7 +128,7 @@ const observeFilterTab = (sdk: FrontendSDK) => {
     });
   }
 
-  if (filterContainer) {
+  if (filterContainer !== null) {
     filterTabObserver.observe(filterContainer, {
       childList: true,
       attributes: true,

@@ -1,10 +1,5 @@
 import { useQuery } from "@pinia/colada";
-import {
-  type Result,
-  type SettingKey,
-  type Settings,
-  type SettingValue,
-} from "shared";
+import { type SettingKey, type Settings, type SettingValue } from "shared";
 import { computed, ref } from "vue";
 
 import { useSDK } from "@/plugins/sdk";

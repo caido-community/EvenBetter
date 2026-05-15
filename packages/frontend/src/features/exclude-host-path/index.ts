@@ -9,9 +9,10 @@ const excludeHostPathFunctionality = (sdk: FrontendSDK) => {
       if (!selectedRequest) return;
 
       const currentQuery = sdk.httpHistory.getQuery();
-      const newQuery = currentQuery
-        ? `${currentQuery} AND req.host.ne:"${selectedRequest.host}"`
-        : `req.host.ne:"${selectedRequest.host}"`;
+      const newQuery =
+        currentQuery.length > 0
+          ? `${currentQuery} AND req.host.ne:"${selectedRequest.host}"`
+          : `req.host.ne:"${selectedRequest.host}"`;
       sdk.httpHistory.setQuery(newQuery);
     },
   });
@@ -29,9 +30,10 @@ const excludeHostPathFunctionality = (sdk: FrontendSDK) => {
       if (!selectedRequest) return;
 
       const currentQuery = sdk.httpHistory.getQuery();
-      const newQuery = currentQuery
-        ? `${currentQuery} AND req.path.ne:"${selectedRequest.path}"`
-        : `req.path.ne:"${selectedRequest.path}"`;
+      const newQuery =
+        currentQuery.length > 0
+          ? `${currentQuery} AND req.path.ne:"${selectedRequest.path}"`
+          : `req.path.ne:"${selectedRequest.path}"`;
       sdk.httpHistory.setQuery(newQuery);
     },
   });

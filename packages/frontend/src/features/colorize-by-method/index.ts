@@ -1,31 +1,30 @@
-import { createFeature } from "@/features/manager";
-import { type FrontendSDK } from "@/types";
-
 import "./style.css";
 
 import { onLocationChange } from "@/dom";
+import { createFeature } from "@/features/manager";
+import { type FrontendSDK } from "@/types";
 
 let abortController: AbortController | undefined = undefined;
 let observer: MutationObserver | undefined = undefined;
+let stopLocationChange: (() => void) | undefined = undefined;
+let stopProjectChange: (() => void) | undefined = undefined;
 
-function setTabMethodAttributes(sdk: FrontendSDK) {
+async function setTabMethodAttributes(sdk: FrontendSDK) {
   const tabs = document.querySelectorAll(
     ".c-tab-list__body .c-tab-list__tab [data-session-id]",
   );
 
-  const promises = Array.from(tabs).map(async (tab) => {
+  for (const tab of Array.from(tabs)) {
     const sessionId = tab.getAttribute("data-session-id");
-    if (sessionId === null) return;
+    if (sessionId === null) continue;
 
     const method = await getHTTPMethod(sessionId, sdk);
     tab.setAttribute("http-method", method);
-  });
+  }
 
-  Promise.all(promises).then(() => {
-    setTimeout(() => {
-      updateSelectedTabColor();
-    }, 100);
-  });
+  setTimeout(() => {
+    updateSelectedTabColor();
+  }, 100);
 }
 
 function updateCurrentTabHTTPMethod(newMethod: string) {
@@ -71,6 +70,22 @@ type HTTPMethod =
   | "CONNECT"
   | "UNKNOWN";
 
+const HTTP_METHODS = new Set<string>([
+  "GET",
+  "POST",
+  "PUT",
+  "DELETE",
+  "OPTIONS",
+  "PATCH",
+  "HEAD",
+  "TRACE",
+  "CONNECT",
+]);
+
+function isHTTPMethod(method: string | undefined): method is HTTPMethod {
+  return method !== undefined && HTTP_METHODS.has(method);
+}
+
 async function getHTTPMethod(
   sessionId: string,
   sdk: FrontendSDK,
@@ -79,14 +94,16 @@ async function getHTTPMethod(
   if (data.replayEntry?.raw === undefined) return "UNKNOWN";
 
   const method = data.replayEntry.raw.split("\n")[0]?.split(" ")[0];
-  return (method as HTTPMethod) || "UNKNOWN";
+  if (isHTTPMethod(method)) return method;
+
+  return "UNKNOWN";
 }
 
 function handleTabListChanges(sdk: FrontendSDK) {
-  setTabMethodAttributes(sdk);
+  void setTabMethodAttributes(sdk);
 
   const observer = new MutationObserver(() => {
-    setTabMethodAttributes(sdk);
+    void setTabMethodAttributes(sdk);
   });
 
   const tabList = document.querySelector(".c-tab-list__body");
@@ -111,6 +128,18 @@ const cleanup = () => {
   }
 };
 
+const cleanupListeners = () => {
+  if (stopLocationChange !== undefined) {
+    stopLocationChange();
+    stopLocationChange = undefined;
+  }
+
+  if (stopProjectChange !== undefined) {
+    stopProjectChange();
+    stopProjectChange = undefined;
+  }
+};
+
 function setup(sdk: FrontendSDK) {
   cleanup();
 
@@ -121,13 +150,14 @@ function setup(sdk: FrontendSDK) {
 
 export const colorizeByMethod = createFeature("colorize-by-method", {
   onFlagEnabled: (sdk) => {
+    cleanupListeners();
     setup(sdk);
 
     setTimeout(() => {
       abortController = liveUpdateHTTPMethod();
     }, 2000);
 
-    onLocationChange((data) => {
+    stopLocationChange = onLocationChange((data) => {
       cleanup();
 
       if (data.newHash === "#/replay") {
@@ -135,7 +165,7 @@ export const colorizeByMethod = createFeature("colorize-by-method", {
       }
     });
 
-    sdk.backend.onEvent("caido:project-change", () => {
+    const projectChange = sdk.backend.onEvent("caido:project-change", () => {
       let attempts = 0;
       const maxAttempts = 25;
       const interval = setInterval(() => {
@@ -150,8 +180,10 @@ export const colorizeByMethod = createFeature("colorize-by-method", {
         }
       }, 200);
     });
+    stopProjectChange = projectChange.stop;
   },
   onFlagDisabled: () => {
     cleanup();
+    cleanupListeners();
   },
 });
