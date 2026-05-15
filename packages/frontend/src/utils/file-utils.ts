@@ -1,8 +1,6 @@
 export const downloadFile = (name: string, content: string) => {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(
-    new Blob([content], { type: "application/json" }),
-  );
+  a.href = `data:application/json;charset=utf-8,${encodeURIComponent(content)}`;
   a.download = name;
   document.body.appendChild(a);
   a.click();

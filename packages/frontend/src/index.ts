@@ -1,4 +1,5 @@
 import { Classic } from "@caido/primevue";
+import { PiniaColada } from "@pinia/colada";
 import { createPinia } from "pinia";
 import PrimeVue from "primevue/config";
 import Tooltip from "primevue/tooltip";
@@ -11,9 +12,6 @@ import type { FrontendSDK } from "./types";
 import App from "./views/App.vue";
 
 import { initDOMManager } from "@/dom";
-
-import { PiniaColada } from "@pinia/colada";
-
 import { initialize } from "@/features/manager";
 import { initFontLoader } from "@/fonts";
 
